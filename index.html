@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cádiz RP · Emergencias</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --verde: #0a6b4f;
+    --verde-claro: #12a877;
+    --verde-oscuro: #063d2d;
+    --gris-900: #0f1512;
+    --gris-800: #161e1a;
+    --gris-700: #1f2a24;
+    --gris-600: #2b3830;
+    --gris-400: #6b7a72;
+    --gris-200: #b8c4bd;
+    --blanco: #f4f7f5;
+    --rojo: #d43a3a;
+    --amarillo: #e0b23a;
+    --ambar: #d97a25;
+    --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;font-family:var(--font);}
+  body{background:var(--gris-900);color:var(--blanco);min-height:100vh;}
+  ::-webkit-scrollbar{width:8px;}
+  ::-webkit-scrollbar-thumb{background:var(--gris-600);border-radius:4px;}
+
+  /* ---------- LOGIN ---------- */
+  #loginScreen{
+    min-height:100vh;display:flex;align-items:center;justify-content:center;
+    background:radial-gradient(circle at 20% 20%, var(--verde-oscuro), var(--gris-900) 60%);
+  }
+  .login-box{
+    background:var(--gris-800);border:1px solid var(--gris-600);
+    border-radius:14px;padding:40px 36px;width:100%;max-width:380px;
+    box-shadow:0 20px 60px rgba(0,0,0,.5);
+  }
+  .login-box .badge{
+    font-size:11px;letter-spacing:.2em;color:var(--verde-claro);
+    text-transform:uppercase;font-weight:700;margin-bottom:6px;
+  }
+  .login-box h1{font-size:26px;margin-bottom:4px;}
+  .login-box .sub{color:var(--gris-400);font-size:13px;margin-bottom:26px;}
+  .field{margin-bottom:16px;}
+  .field label{display:block;font-size:12px;color:var(--gris-200);margin-bottom:6px;}
+  .field input{
+    width:100%;padding:11px 12px;border-radius:8px;border:1px solid var(--gris-600);
+    background:var(--gris-700);color:var(--blanco);font-size:14px;outline:none;
+    transition:border .15s;
+  }
+  .field input:focus{border-color:var(--verde-claro);}
+  .btn-primary{
+    width:100%;padding:12px;border:none;border-radius:8px;
+    background:var(--verde);color:#fff;font-weight:600;font-size:14px;
+    cursor:pointer;transition:background .15s;margin-top:6px;
+  }
+  .btn-primary:hover{background:var(--verde-claro);}
+  .btn-primary:disabled{opacity:.5;cursor:not-allowed;}
+  .link-toggle{
+    text-align:center;margin-top:16px;font-size:12px;color:var(--gris-400);
+  }
+  .link-toggle a{color:var(--verde-claro);cursor:pointer;text-decoration:none;}
+  .error-msg{
+    background:rgba(212,58,58,.12);border:1px solid rgba(212,58,58,.4);
+    color:#f0a0a0;font-size:12.5px;padding:9px 12px;border-radius:7px;margin-bottom:14px;
+    display:none;
+  }
+  .ok-msg{
+    background:rgba(18,168,119,.12);border:1px solid rgba(18,168,119,.4);
+    color:var(--verde-claro);font-size:12.5px;padding:9px 12px;border-radius:7px;margin-bottom:14px;
+    display:none;
+  }
+
+  /* ---------- APP LAYOUT ---------- */
+  #app{display:none;min-height:100vh;grid-template-columns:230px 1fr;}
+  #app.show{display:grid;}
+  aside{
+    background:var(--gris-800);border-right:1px solid var(--gris-600);
+    padding:22px 16px;display:flex;flex-direction:column;
+  }
+  .brand{display:flex;align-items:center;gap:10px;margin-bottom:30px;padding:0 4px;}
+  .brand .dot{width:10px;height:10px;border-radius:50%;background:var(--verde-claro);box-shadow:0 0 10px var(--verde-claro);}
+  .brand span{font-weight:700;font-size:15px;}
+  .brand small{display:block;color:var(--gris-400);font-size:10px;letter-spacing:.1em;}
+
+  nav .nav-item{
+    display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;
+    color:var(--gris-200);font-size:13.5px;cursor:pointer;margin-bottom:4px;
+    transition:background .15s,color .15s;
+  }
+  nav .nav-item:hover{background:var(--gris-700);color:var(--blanco);}
+  nav .nav-item.active{background:var(--verde-oscuro);color:var(--verde-claro);font-weight:600;}
+
+  .sidebar-footer{margin-top:auto;padding-top:16px;border-top:1px solid var(--gris-600);}
+  .user-chip{display:flex;align-items:center;gap:10px;margin-bottom:10px;}
+  .avatar{
+    width:34px;height:34px;border-radius:50%;background:var(--verde);
+    display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;
+  }
+  .user-chip .name{font-size:13px;font-weight:600;}
+  .user-chip .role{font-size:11px;color:var(--gris-400);text-transform:capitalize;}
+  .btn-logout{
+    width:100%;padding:8px;border-radius:7px;border:1px solid var(--gris-600);
+    background:transparent;color:var(--gris-200);font-size:12.5px;cursor:pointer;
+  }
+  .btn-logout:hover{border-color:var(--rojo);color:var(--rojo);}
+
+  main{padding:28px 34px;overflow-y:auto;}
+  .topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;}
+  .topbar h2{font-size:22px;}
+  .topbar .meta{color:var(--gris-400);font-size:12.5px;}
+
+  .btn-accent{
+    padding:9px 16px;border:none;border-radius:8px;background:var(--verde);
+    color:#fff;font-size:13px;font-weight:600;cursor:pointer;
+  }
+  .btn-accent:hover{background:var(--verde-claro);}
+
+  .card{
+    background:var(--gris-800);border:1px solid var(--gris-600);
+    border-radius:12px;padding:18px 20px;margin-bottom:14px;
+  }
+  .grid-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:22px;}
+  .stat{background:var(--gris-800);border:1px solid var(--gris-600);border-radius:12px;padding:16px 18px;}
+  .stat .num{font-size:26px;font-weight:700;}
+  .stat .lbl{font-size:12px;color:var(--gris-400);margin-top:2px;}
+
+  table{width:100%;border-collapse:collapse;font-size:13.5px;}
+  th{text-align:left;color:var(--gris-400);font-weight:600;font-size:11.5px;
+     text-transform:uppercase;letter-spacing:.05em;padding:8px 10px;border-bottom:1px solid var(--gris-600);}
+  td{padding:10px;border-bottom:1px solid var(--gris-700);}
+  tr:hover td{background:var(--gris-700);}
+
+  .badge-nivel{padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700;text-transform:uppercase;}
+  .badge-nivel.verde{background:#1a4a35;color:#4ade80;}
+  .badge-nivel.amarillo{background:#4a4218;color:var(--amarillo);}
+  .badge-nivel.ambar{background:#4a2f10;color:var(--ambar);}
+  .badge-nivel.rojo{background:#4a1a1a;color:#f87171;}
+
+  .badge-estado{padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600;}
+  .badge-estado.disponible{background:#1a4a35;color:#4ade80;}
+  .badge-estado.no_disponible{background:#4a1a1a;color:#f87171;}
+  .badge-estado.en_servicio{background:#4a4218;color:var(--amarillo);}
+
+  .empty{color:var(--gris-400);font-size:13px;padding:24px;text-align:center;}
+
+  .modal-overlay{
+    display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);
+    align-items:center;justify-content:center;z-index:50;
+  }
+  .modal-overlay.show{display:flex;}
+  .modal{
+    background:var(--gris-800);border:1px solid var(--gris-600);border-radius:12px;
+    padding:26px;width:100%;max-width:420px;
+  }
+  .modal h3{margin-bottom:16px;font-size:17px;}
+  .modal .field select, .modal .field textarea{
+    width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--gris-600);
+    background:var(--gris-700);color:var(--blanco);font-size:13.5px;outline:none;
+  }
+  .modal-actions{display:flex;gap:10px;margin-top:18px;}
+  .btn-secondary{
+    flex:1;padding:10px;border-radius:8px;border:1px solid var(--gris-600);
+    background:transparent;color:var(--gris-200);cursor:pointer;font-size:13px;
+  }
+  .btn-accent{flex:1;}
+
+  .section{display:none;}
+  .section.active{display:block;}
+
+  @media(max-width:800px){
+    #app.show{grid-template-columns:1fr;}
+    aside{display:none;}
+    .grid-stats{grid-template-columns:repeat(2,1fr);}
+  }
+</style>
+</head>
+<body>
+
+<!-- ================= LOGIN ================= -->
+<div id="loginScreen">
+  <div class="login-box">
+    <div class="badge">Centro de Coordinación</div>
+    <h1>Cádiz RP</h1>
+    <div class="sub">Panel de Emergencias · Acceso con email y contraseña</div>
+
+    <div class="error-msg" id="errorMsg"></div>
+    <div class="ok-msg" id="okMsg"></div>
+
+    <div class="field">
+      <label>Correo electrónico</label>
+      <input type="email" id="loginEmail" placeholder="tucorreo@ejemplo.com" autocomplete="email">
+    </div>
+    <div class="field">
+      <label>Contraseña</label>
+      <input type="password" id="loginPassword" placeholder="••••••••" autocomplete="current-password">
+    </div>
+
+    <button class="btn-primary" id="btnLogin">Iniciar sesión</button>
+    <button class="btn-primary" id="btnRegister" style="display:none;background:transparent;border:1px solid var(--gris-600);">Crear cuenta</button>
+
+    <div class="link-toggle">
+      <span id="toggleToRegister">¿No tienes cuenta? <a>Regístrate</a></span>
+      <span id="toggleToLogin" style="display:none;">¿Ya tienes cuenta? <a>Inicia sesión</a></span>
+    </div>
+  </div>
+</div>
+
+<!-- ================= APP ================= -->
+<div id="app">
+  <aside>
+    <div class="brand">
+      <div class="dot"></div>
+      <div>
+        <span>CÁDIZ RP</span>
+        <small>EMERGENCIAS 24/7</small>
+      </div>
+    </div>
+    <nav>
+      <div class="nav-item active" data-section="incidentes">📋 Incidentes</div>
+      <div class="nav-item" data-section="unidades">🚓 Unidades</div>
+      <div class="nav-item" data-section="personal">👥 Personal</div>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="user-chip">
+        <div class="avatar" id="avatarInit">?</div>
+        <div>
+          <div class="name" id="userName">—</div>
+          <div class="role" id="userRole">—</div>
+        </div>
+      </div>
+      <button class="btn-logout" id="btnLogout">Cerrar sesión</button>
+    </div>
+  </aside>
+
+  <main>
+    <!-- INCIDENTES -->
+    <section class="section active" id="section-incidentes">
+      <div class="topbar">
+        <div>
+          <h2>Incidentes activos</h2>
+          <div class="meta" id="incMeta">Cargando…</div>
+        </div>
+        <button class="btn-accent" id="btnNuevoIncidente" style="display:none;">+ Nuevo incidente</button>
+      </div>
+
+      <div class="grid-stats">
+        <div class="stat"><div class="num" id="statAbiertos">0</div><div class="lbl">Abiertos</div></div>
+        <div class="stat"><div class="num" id="statCurso">0</div><div class="lbl">En curso</div></div>
+        <div class="stat"><div class="num" id="statRojo">0</div><div class="lbl">Nivel rojo</div></div>
+        <div class="stat"><div class="num" id="statCerrados">0</div><div class="lbl">Cerrados hoy</div></div>
+      </div>
+
+      <div class="card">
+        <table>
+          <thead><tr><th>Título</th><th>Nivel</th><th>Ubicación</th><th>Cuerpo</th><th>Estado</th><th>Hora</th></tr></thead>
+          <tbody id="incidentesBody"><tr><td colspan="6" class="empty">Cargando incidentes…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- UNIDADES -->
+    <section class="section" id="section-unidades">
+      <div class="topbar">
+        <div><h2>Unidades en servicio</h2><div class="meta" id="uniMeta">Cargando…</div></div>
+      </div>
+      <div class="card">
+        <table>
+          <thead><tr><th>Cuerpo</th><th>Indicativo</th><th>Estado</th><th>Asignado a</th></tr></thead>
+          <tbody id="unidadesBody"><tr><td colspan="4" class="empty">Cargando unidades…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- PERSONAL -->
+    <section class="section" id="section-personal">
+      <div class="topbar">
+        <div><h2>Personal registrado</h2><div class="meta" id="perMeta">Cargando…</div></div>
+      </div>
+      <div class="card">
+        <table>
+          <thead><tr><th>Nombre</th><th>Cuerpo</th><th>Rango</th><th>Rol</th><th>Disponibilidad</th></tr></thead>
+          <tbody id="personalBody"><tr><td colspan="5" class="empty">Cargando personal…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- Modal nuevo incidente -->
+<div class="modal-overlay" id="modalIncidente">
+  <div class="modal">
+    <h3>Nuevo incidente</h3>
+    <div class="field">
+      <label>Título</label>
+      <input type="text" id="incTitulo" placeholder="Ej: Accidente de tráfico N-IV">
+    </div>
+    <div class="field">
+      <label>Descripción</label>
+      <textarea id="incDescripcion" rows="3" placeholder="Detalles del incidente..."></textarea>
+    </div>
+    <div class="field">
+      <label>Ubicación</label>
+      <input type="text" id="incUbicacion" placeholder="Ej: Av. de Andalucía, Cádiz">
+    </div>
+    <div class="field">
+      <label>Nivel</label>
+      <select id="incNivel">
+        <option value="verde">Verde</option>
+        <option value="amarillo">Amarillo</option>
+        <option value="ambar">Ámbar</option>
+        <option value="rojo">Rojo</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Cuerpo asignado</label>
+      <select id="incCuerpo">
+        <option value="POLICIA_LOCAL">Policía Local</option>
+        <option value="CNP">CNP</option>
+        <option value="GC">Guardia Civil</option>
+        <option value="BOMBEROS">Bomberos</option>
+        <option value="SANITARIO">Sanitario</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" id="btnCancelarIncidente">Cancelar</button>
+      <button class="btn-accent" id="btnGuardarIncidente">Crear</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   CONFIGURACIÓN SUPABASE
+   Rellena estos dos valores con los de tu proyecto:
+   Supabase Dashboard > Settings > API
+   ============================================================ */
+const SUPABASE_URL = "https://TU_PROYECTO.supabase.co";
+const SUPABASE_ANON_KEY = "TU_ANON_KEY_AQUI";
+
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+let currentUser = null;
+let currentProfile = null;
+
+/* ---------- UTIL ---------- */
+function showError(msg){
+  const el = document.getElementById('errorMsg');
+  el.textContent = msg; el.style.display = 'block';
+  document.getElementById('okMsg').style.display = 'none';
+}
+function showOk(msg){
+  const el = document.getElementById('okMsg');
+  el.textContent = msg; el.style.display = 'block';
+  document.getElementById('errorMsg').style.display = 'none';
+}
+function clearMsgs(){
+  document.getElementById('errorMsg').style.display = 'none';
+  document.getElementById('okMsg').style.display = 'none';
+}
+
+/* ---------- TOGGLE LOGIN / REGISTER ---------- */
+let modoRegistro = false;
+document.getElementById('toggleToRegister').addEventListener('click', () => {
+  modoRegistro = true;
+  document.getElementById('btnLogin').style.display = 'none';
+  document.getElementById('btnRegister').style.display = 'block';
+  document.getElementById('toggleToRegister').style.display = 'none';
+  document.getElementById('toggleToLogin').style.display = 'block';
+  clearMsgs();
+});
+document.getElementById('toggleToLogin').addEventListener('click', () => {
+  modoRegistro = false;
+  document.getElementById('btnLogin').style.display = 'block';
+  document.getElementById('btnRegister').style.display = 'none';
+  document.getElementById('toggleToRegister').style.display = 'block';
+  document.getElementById('toggleToLogin').style.display = 'none';
+  clearMsgs();
+});
+
+/* ---------- LOGIN ---------- */
+document.getElementById('btnLogin').addEventListener('click', async () => {
+  clearMsgs();
+  const email = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  if(!email || !password){ showError('Rellena email y contraseña.'); return; }
+
+  const { data, error } = await sb.auth.signInWithPassword({ email, password });
+  if(error){ showError('Error: ' + error.message); return; }
+  await initApp();
+});
+
+/* ---------- REGISTER ---------- */
+document.getElementById('btnRegister').addEventListener('click', async () => {
+  clearMsgs();
+  const email = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  if(!email || !password){ showError('Rellena email y contraseña.'); return; }
+  if(password.length < 6){ showError('La contraseña debe tener al menos 6 caracteres.'); return; }
+
+  const { data, error } = await sb.auth.signUp({
+    email, password,
+    options: { data: { nombre: email.split('@')[0] } }
+  });
+  if(error){ showError('Error: ' + error.message); return; }
+  showOk('Cuenta creada. Ya puedes iniciar sesión.');
+});
+
+/* ---------- LOGOUT ---------- */
+document.getElementById('btnLogout').addEventListener('click', async () => {
+  await sb.auth.signOut();
+  location.reload();
+});
+
+/* ---------- SESIÓN AL CARGAR ---------- */
+(async function checkSession(){
+  const { data: { session } } = await sb.auth.getSession();
+  if(session){ await initApp(); }
+})();
+
+/* ---------- INIT APP ---------- */
+async function initApp(){
+  const { data: { user } } = await sb.auth.getUser();
+  if(!user){ showError('No se pudo verificar la sesión.'); return; }
+  currentUser = user;
+
+  const { data: perfil, error } = await sb.from('usuarios').select('*').eq('id', user.id).single();
+  if(error){ showError('No se pudo cargar tu perfil: ' + error.message); return; }
+  currentProfile = perfil;
+
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('app').classList.add('show');
+
+  document.getElementById('userName').textContent = perfil.nombre || user.email;
+  document.getElementById('userRole').textContent = perfil.role;
+  document.getElementById('avatarInit').textContent = (perfil.nombre || user.email)[0].toUpperCase();
+
+  if(['staff','admin','dueño'].includes(perfil.role)){
+    document.getElementById('btnNuevoIncidente').style.display = 'inline-block';
+  }
+
+  cargarIncidentes();
+  cargarUnidades();
+  cargarPersonal();
+}
+
+/* ---------- NAVEGACIÓN ---------- */
+document.querySelectorAll('.nav-item').forEach(item => {
+  item.addEventListener('click', () => {
+    document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+    item.classList.add('active');
+    document.getElementById('section-' + item.dataset.section).classList.add('active');
+  });
+});
+
+/* ---------- INCIDENTES ---------- */
+async function cargarIncidentes(){
+  const { data, error } = await sb.from('incidentes').select('*').order('creado_en', { ascending: false });
+  const body = document.getElementById('incidentesBody');
+  if(error){ body.innerHTML = `<tr><td colspan="6" class="empty">Error: ${error.message}</td></tr>`; return; }
+
+  if(!data.length){
+    body.innerHTML = '<tr><td colspan="6" class="empty">No hay incidentes registrados.</td></tr>';
+  } else {
+    body.innerHTML = data.map(i => `
+      <tr>
+        <td>${escapeHtml(i.titulo)}</td>
+        <td><span class="badge-nivel ${i.nivel}">${i.nivel}</span></td>
+        <td>${escapeHtml(i.ubicacion || '—')}</td>
+        <td>${escapeHtml(i.cuerpo_asignado || '—')}</td>
+        <td>${escapeHtml(i.estado)}</td>
+        <td>${new Date(i.creado_en).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'})}</td>
+      </tr>
+    `).join('');
+  }
+
+  document.getElementById('statAbiertos').textContent = data.filter(i=>i.estado==='abierto').length;
+  document.getElementById('statCurso').textContent = data.filter(i=>i.estado==='en_curso').length;
+  document.getElementById('statRojo').textContent = data.filter(i=>i.nivel==='rojo' && i.estado!=='cerrado').length;
+  const hoy = new Date().toDateString();
+  document.getElementById('statCerrados').textContent = data.filter(i=>i.estado==='cerrado' && i.cerrado_en && new Date(i.cerrado_en).toDateString()===hoy).length;
+
+  document.getElementById('incMeta').textContent = `${data.length} incidentes en total`;
+}
+
+document.getElementById('btnNuevoIncidente').addEventListener('click', () => {
+  document.getElementById('modalIncidente').classList.add('show');
+});
+document.getElementById('btnCancelarIncidente').addEventListener('click', () => {
+  document.getElementById('modalIncidente').classList.remove('show');
+});
+document.getElementById('btnGuardarIncidente').addEventListener('click', async () => {
+  const titulo = document.getElementById('incTitulo').value.trim();
+  if(!titulo){ alert('El título es obligatorio.'); return; }
+
+  const payload = {
+    titulo,
+    descripcion: document.getElementById('incDescripcion').value.trim(),
+    ubicacion: document.getElementById('incUbicacion').value.trim(),
+    nivel: document.getElementById('incNivel').value,
+    cuerpo_asignado: document.getElementById('incCuerpo').value,
+    estado: 'abierto',
+    creado_por: currentUser.id
+  };
+
+  const { error } = await sb.from('incidentes').insert(payload);
+  if(error){ alert('Error al crear incidente: ' + error.message); return; }
+
+  document.getElementById('modalIncidente').classList.remove('show');
+  document.getElementById('incTitulo').value = '';
+  document.getElementById('incDescripcion').value = '';
+  document.getElementById('incUbicacion').value = '';
+  cargarIncidentes();
+});
+
+/* ---------- UNIDADES ---------- */
+async function cargarUnidades(){
+  const { data, error } = await sb.from('unidades').select('*, usuarios(nombre)').order('cuerpo');
+  const body = document.getElementById('unidadesBody');
+  if(error){ body.innerHTML = `<tr><td colspan="4" class="empty">Error: ${error.message}</td></tr>`; return; }
+
+  if(!data.length){
+    body.innerHTML = '<tr><td colspan="4" class="empty">No hay unidades registradas.</td></tr>';
+  } else {
+    body.innerHTML = data.map(u => `
+      <tr>
+        <td>${escapeHtml(u.cuerpo)}</td>
+        <td>${escapeHtml(u.indicativo)}</td>
+        <td><span class="badge-estado ${u.estado}">${u.estado.replace('_',' ')}</span></td>
+        <td>${u.usuarios ? escapeHtml(u.usuarios.nombre) : '—'}</td>
+      </tr>
+    `).join('');
+  }
+  document.getElementById('uniMeta').textContent = `${data.length} unidades registradas`;
+}
+
+/* ---------- PERSONAL ---------- */
+async function cargarPersonal(){
+  const { data, error } = await sb.from('usuarios').select('*').order('nombre');
+  const body = document.getElementById('personalBody');
+  if(error){ body.innerHTML = `<tr><td colspan="5" class="empty">Error: ${error.message}</td></tr>`; return; }
+
+  if(!data.length){
+    body.innerHTML = '<tr><td colspan="5" class="empty">No hay personal registrado.</td></tr>';
+  } else {
+    body.innerHTML = data.map(p => `
+      <tr>
+        <td>${escapeHtml(p.nombre)}</td>
+        <td>${escapeHtml(p.cuerpo || '—')}</td>
+        <td>${escapeHtml(p.rango || '—')}</td>
+        <td>${escapeHtml(p.role)}</td>
+        <td><span class="badge-estado ${p.disponibilidad}">${(p.disponibilidad||'').replace('_',' ')}</span></td>
+      </tr>
+    `).join('');
+  }
+  document.getElementById('perMeta').textContent = `${data.length} miembros`;
+}
+
+/* ---------- HELPERS ---------- */
+function escapeHtml(str){
+  if(str === null || str === undefined) return '';
+  return String(str).replace(/[&<>"']/g, m => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[m]));
+}
+</script>
+</body>
+</html>
