@@ -51,6 +51,7 @@
     transition:border .15s;
   }
   .field input:focus{border-color:var(--verde-claro);}
+  .field .hint{font-size:11px;color:var(--gris-400);margin-top:5px;}
   .btn-primary{
     width:100%;padding:12px;border:none;border-radius:8px;
     background:var(--verde);color:#fff;font-weight:600;font-size:14px;
@@ -118,6 +119,12 @@
   }
   .btn-accent:hover{background:var(--verde-claro);}
 
+  .btn-mini{
+    padding:5px 11px;border-radius:7px;border:1px solid var(--gris-600);
+    background:transparent;color:var(--gris-200);font-size:12px;cursor:pointer;
+  }
+  .btn-mini:hover{border-color:var(--verde-claro);color:var(--verde-claro);}
+
   .card{
     background:var(--gris-800);border:1px solid var(--gris-600);
     border-radius:12px;padding:18px 20px;margin-bottom:14px;
@@ -143,6 +150,12 @@
   .badge-estado.disponible{background:#1a4a35;color:#4ade80;}
   .badge-estado.no_disponible{background:#4a1a1a;color:#f87171;}
   .badge-estado.en_servicio{background:#4a4218;color:var(--amarillo);}
+
+  .badge-cuerpo{
+    padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600;
+    background:var(--gris-700);color:var(--gris-200);border:1px solid var(--gris-600);
+  }
+  .badge-cuerpo.sin-asignar{color:var(--gris-400);font-style:italic;}
 
   .empty{color:var(--gris-400);font-size:13px;padding:24px;text-align:center;}
 
@@ -184,14 +197,14 @@
   <div class="login-box">
     <div class="badge">Centro de Coordinación</div>
     <h1>Cádiz RP</h1>
-    <div class="sub">Panel de Emergencias · Acceso con email y contraseña</div>
+    <div class="sub">Panel de Emergencias · Acceso con usuario y contraseña</div>
 
     <div class="error-msg" id="errorMsg"></div>
     <div class="ok-msg" id="okMsg"></div>
 
     <div class="field">
-      <label>Correo electrónico</label>
-      <input type="email" id="loginEmail" placeholder="tucorreo@ejemplo.com" autocomplete="email">
+      <label>Usuario</label>
+      <input type="text" id="loginUsername" placeholder="tu_usuario" autocomplete="username">
     </div>
     <div class="field">
       <label>Contraseña</label>
@@ -281,8 +294,8 @@
       </div>
       <div class="card">
         <table>
-          <thead><tr><th>Nombre</th><th>Cuerpo</th><th>Rango</th><th>Rol</th><th>Disponibilidad</th></tr></thead>
-          <tbody id="personalBody"><tr><td colspan="5" class="empty">Cargando personal…</td></tr></tbody>
+          <thead><tr><th>Usuario</th><th>Cuerpo</th><th>Rango</th><th>Rol</th><th>Disponibilidad</th><th></th></tr></thead>
+          <tbody id="personalBody"><tr><td colspan="6" class="empty">Cargando personal…</td></tr></tbody>
         </table>
       </div>
     </section>
@@ -331,19 +344,69 @@
   </div>
 </div>
 
+<!-- Modal editar personal (solo admin/dueño) -->
+<div class="modal-overlay" id="modalPersonal">
+  <div class="modal">
+    <h3>Editar miembro: <span id="editPersonalNombre"></span></h3>
+    <div class="field">
+      <label>Cuerpo</label>
+      <select id="editCuerpo">
+        <option value="">Sin asignar</option>
+        <option value="Staff">Staff</option>
+        <option value="Civil">Civil</option>
+        <option value="061">061</option>
+        <option value="Bomberos">Bomberos</option>
+        <option value="Conservacion">Conservación</option>
+        <option value="CNP">CNP</option>
+        <option value="PL">PL</option>
+        <option value="Proteccion Civil">Protección Civil</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Rango</label>
+      <input type="text" id="editRango" placeholder="Ej: Agente, Oficial, Cabo...">
+    </div>
+    <div class="field">
+      <label>Rol (permisos en el panel)</label>
+      <select id="editRole">
+        <option value="usuario">Usuario</option>
+        <option value="staff">Staff (puede crear incidentes)</option>
+        <option value="admin">Admin</option>
+        <option value="dueño">Dueño</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Disponibilidad</label>
+      <select id="editDisponibilidad">
+        <option value="no_disponible">No disponible</option>
+        <option value="disponible">Disponible</option>
+        <option value="en_servicio">En servicio</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" id="btnCancelarPersonal">Cancelar</button>
+      <button class="btn-accent" id="btnGuardarPersonal">Guardar</button>
+    </div>
+  </div>
+</div>
+
 <script>
 /* ============================================================
    CONFIGURACIÓN SUPABASE
-   Rellena estos dos valores con los de tu proyecto:
-   Supabase Dashboard > Settings > API
    ============================================================ */
 const SUPABASE_URL = "https://vlkrbsnfjouqyzacdssz.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_MVdeKIK7EEbi4VzqUMXLKA_O7zB8VDJ";
 
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+// Dominio interno usado para poder autenticar por "usuario" en vez de email
+// (Supabase Auth exige un email por debajo, esto queda oculto al usuario).
+const DOMINIO_INTERNO = "cadizrp.local";
+
 let currentUser = null;
 let currentProfile = null;
+let personalCache = [];
+let editingUserId = null;
 
 /* ---------- UTIL ---------- */
 function showError(msg){
@@ -359,6 +422,17 @@ function showOk(msg){
 function clearMsgs(){
   document.getElementById('errorMsg').style.display = 'none';
   document.getElementById('okMsg').style.display = 'none';
+}
+
+// Normaliza el nombre de usuario: minúsculas, sin espacios, solo letras/números/_-.
+function normalizarUsuario(u){
+  return u.trim().toLowerCase().replace(/\s+/g, '');
+}
+function usuarioValido(u){
+  return /^[a-z0-9_\.\-]{3,20}$/.test(u);
+}
+function usernameToEmail(username){
+  return `${normalizarUsuario(username)}@${DOMINIO_INTERNO}`;
 }
 
 /* ---------- TOGGLE LOGIN / REGISTER ---------- */
@@ -383,29 +457,46 @@ document.getElementById('toggleToLogin').addEventListener('click', () => {
 /* ---------- LOGIN ---------- */
 document.getElementById('btnLogin').addEventListener('click', async () => {
   clearMsgs();
-  const email = document.getElementById('loginEmail').value.trim();
+  const username = document.getElementById('loginUsername').value;
   const password = document.getElementById('loginPassword').value;
-  if(!email || !password){ showError('Rellena email y contraseña.'); return; }
+  if(!username || !password){ showError('Rellena usuario y contraseña.'); return; }
 
-  const { data, error } = await sb.auth.signInWithPassword({ email, password });
-  if(error){ showError('Error: ' + error.message); return; }
+  const { data, error } = await sb.auth.signInWithPassword({
+    email: usernameToEmail(username),
+    password
+  });
+  if(error){ showError('Usuario o contraseña incorrectos.'); return; }
   await initApp();
 });
 
 /* ---------- REGISTER ---------- */
 document.getElementById('btnRegister').addEventListener('click', async () => {
   clearMsgs();
-  const email = document.getElementById('loginEmail').value.trim();
+  const usernameRaw = document.getElementById('loginUsername').value;
   const password = document.getElementById('loginPassword').value;
-  if(!email || !password){ showError('Rellena email y contraseña.'); return; }
+  const username = normalizarUsuario(usernameRaw);
+
+  if(!username || !password){ showError('Rellena usuario y contraseña.'); return; }
+  if(!usuarioValido(username)){
+    showError('El usuario debe tener 3-20 caracteres: letras, números, "_", "-" o "." (sin espacios).');
+    return;
+  }
   if(password.length < 6){ showError('La contraseña debe tener al menos 6 caracteres.'); return; }
 
   const { data, error } = await sb.auth.signUp({
-    email, password,
-    options: { data: { nombre: email.split('@')[0] } }
+    email: usernameToEmail(username),
+    password,
+    options: { data: { username } }
   });
-  if(error){ showError('Error: ' + error.message); return; }
-  showOk('Cuenta creada. Ya puedes iniciar sesión.');
+  if(error){
+    if(error.message.toLowerCase().includes('already') || error.message.toLowerCase().includes('registrado')){
+      showError('Ese usuario ya existe. Elige otro.');
+    } else {
+      showError('Error: ' + error.message);
+    }
+    return;
+  }
+  showOk('Cuenta creada. Ya puedes iniciar sesión. Un admin te asignará tu cuerpo próximamente.');
 });
 
 /* ---------- LOGOUT ---------- */
@@ -433,9 +524,10 @@ async function initApp(){
   document.getElementById('loginScreen').style.display = 'none';
   document.getElementById('app').classList.add('show');
 
-  document.getElementById('userName').textContent = perfil.nombre || user.email;
+  const nombreMostrado = perfil.username || perfil.nombre || user.email;
+  document.getElementById('userName').textContent = nombreMostrado;
   document.getElementById('userRole').textContent = perfil.role;
-  document.getElementById('avatarInit').textContent = (perfil.nombre || user.email)[0].toUpperCase();
+  document.getElementById('avatarInit').textContent = nombreMostrado[0].toUpperCase();
 
   if(['staff','admin','dueño'].includes(perfil.role)){
     document.getElementById('btnNuevoIncidente').style.display = 'inline-block';
@@ -444,6 +536,10 @@ async function initApp(){
   cargarIncidentes();
   cargarUnidades();
   cargarPersonal();
+}
+
+function esAdmin(){
+  return currentProfile && ['admin','dueño'].includes(currentProfile.role);
 }
 
 /* ---------- NAVEGACIÓN ---------- */
@@ -518,7 +614,7 @@ document.getElementById('btnGuardarIncidente').addEventListener('click', async (
 
 /* ---------- UNIDADES ---------- */
 async function cargarUnidades(){
-  const { data, error } = await sb.from('unidades').select('*, usuarios(nombre)').order('cuerpo');
+  const { data, error } = await sb.from('unidades').select('*, usuarios(username, nombre)').order('cuerpo');
   const body = document.getElementById('unidadesBody');
   if(error){ body.innerHTML = `<tr><td colspan="4" class="empty">Error: ${error.message}</td></tr>`; return; }
 
@@ -530,7 +626,7 @@ async function cargarUnidades(){
         <td>${escapeHtml(u.cuerpo)}</td>
         <td>${escapeHtml(u.indicativo)}</td>
         <td><span class="badge-estado ${u.estado}">${u.estado.replace('_',' ')}</span></td>
-        <td>${u.usuarios ? escapeHtml(u.usuarios.nombre) : '—'}</td>
+        <td>${u.usuarios ? escapeHtml(u.usuarios.username || u.usuarios.nombre) : '—'}</td>
       </tr>
     `).join('');
   }
@@ -539,25 +635,71 @@ async function cargarUnidades(){
 
 /* ---------- PERSONAL ---------- */
 async function cargarPersonal(){
-  const { data, error } = await sb.from('usuarios').select('*').order('nombre');
+  const { data, error } = await sb.from('usuarios').select('*').order('username');
   const body = document.getElementById('personalBody');
-  if(error){ body.innerHTML = `<tr><td colspan="5" class="empty">Error: ${error.message}</td></tr>`; return; }
+  if(error){ body.innerHTML = `<tr><td colspan="6" class="empty">Error: ${error.message}</td></tr>`; return; }
+
+  personalCache = data || [];
 
   if(!data.length){
-    body.innerHTML = '<tr><td colspan="5" class="empty">No hay personal registrado.</td></tr>';
+    body.innerHTML = '<tr><td colspan="6" class="empty">No hay personal registrado.</td></tr>';
   } else {
     body.innerHTML = data.map(p => `
       <tr>
-        <td>${escapeHtml(p.nombre)}</td>
-        <td>${escapeHtml(p.cuerpo || '—')}</td>
+        <td>${escapeHtml(p.username || p.nombre)}</td>
+        <td>${p.cuerpo ? `<span class="badge-cuerpo">${escapeHtml(p.cuerpo)}</span>` : '<span class="badge-cuerpo sin-asignar">Sin asignar</span>'}</td>
         <td>${escapeHtml(p.rango || '—')}</td>
         <td>${escapeHtml(p.role)}</td>
         <td><span class="badge-estado ${p.disponibilidad}">${(p.disponibilidad||'').replace('_',' ')}</span></td>
+        <td>${esAdmin() ? `<button class="btn-mini" data-edit-user="${p.id}">Editar</button>` : ''}</td>
       </tr>
     `).join('');
+
+    if(esAdmin()){
+      body.querySelectorAll('[data-edit-user]').forEach(btn => {
+        btn.addEventListener('click', () => abrirEditorPersonal(btn.dataset.editUser));
+      });
+    }
   }
   document.getElementById('perMeta').textContent = `${data.length} miembros`;
 }
+
+function abrirEditorPersonal(userId){
+  const persona = personalCache.find(p => p.id === userId);
+  if(!persona) return;
+  editingUserId = userId;
+
+  document.getElementById('editPersonalNombre').textContent = persona.username || persona.nombre;
+  document.getElementById('editCuerpo').value = persona.cuerpo || '';
+  document.getElementById('editRango').value = persona.rango || '';
+  document.getElementById('editRole').value = persona.role || 'usuario';
+  document.getElementById('editDisponibilidad').value = persona.disponibilidad || 'no_disponible';
+
+  document.getElementById('modalPersonal').classList.add('show');
+}
+
+document.getElementById('btnCancelarPersonal').addEventListener('click', () => {
+  document.getElementById('modalPersonal').classList.remove('show');
+  editingUserId = null;
+});
+
+document.getElementById('btnGuardarPersonal').addEventListener('click', async () => {
+  if(!editingUserId) return;
+
+  const payload = {
+    cuerpo: document.getElementById('editCuerpo').value || null,
+    rango: document.getElementById('editRango').value.trim() || null,
+    role: document.getElementById('editRole').value,
+    disponibilidad: document.getElementById('editDisponibilidad').value
+  };
+
+  const { error } = await sb.from('usuarios').update(payload).eq('id', editingUserId);
+  if(error){ alert('Error al guardar: ' + error.message); return; }
+
+  document.getElementById('modalPersonal').classList.remove('show');
+  editingUserId = null;
+  cargarPersonal();
+});
 
 /* ---------- HELPERS ---------- */
 function escapeHtml(str){
